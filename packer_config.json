@@ -1,0 +1,5 @@
+{
+    "file": "index.html",
+    "out": "packed_.html",
+    "after": "start packed_.html"
+}

@@ -1,0 +1,10 @@
+
+#canvas {
+    position: absolute;
+    border: 1px;
+    top: 120px;
+    border-style: solid;
+}
+.input-container {
+    height: 1px;
+}
