@@ -41,4 +41,20 @@ class TrNode {
         // console.log(x, y, 10, 10, 0, 0, 360)
     }
 }
-export {TrNode}
+function cloneTreeNode(node, parent = null) {
+    if (node === null) {
+        return null;
+    }
+
+    let newNode = new TrNode(node.value);
+    newNode.height = node.height;
+    newNode.parent = parent;  // Set the parent of the new node
+
+    // Recursively clone the left and right children, passing the new node as their parent
+    newNode.left = cloneTreeNode(node.left, newNode);
+    newNode.right = cloneTreeNode(node.right, newNode);
+
+    return newNode;
+}
+
+export {TrNode, cloneTreeNode}

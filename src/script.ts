@@ -3,7 +3,7 @@
 import "./style.css";
 import "./mui.min.css";
 import {load_btn} from "./bstparse.js";
-import { TrNode } from "./trnode.js";
+import { TrNode, cloneTreeNode } from "./trnode.js";
 import {Vec2, Strokebox, box, norm, Line} from "./tools.js"
 window.onload = () => {
     let canvas: HTMLCanvasElement | null = null
@@ -12,7 +12,31 @@ window.onload = () => {
     const load_button = document.getElementById("load") as HTMLButtonElement
     const insert_input = document.getElementById("input") as HTMLInputElement
     const clear_button = document.getElementById("cler") as HTMLButtonElement
-
+    const delete_button = document.getElementById("delt") as HTMLButtonElement
+    const prev_button = document.getElementById("left") as HTMLButtonElement
+    const next_button = document.getElementById("right") as HTMLButtonElement
+    const frame_field = document.getElementById("frame") as HTMLInputElement
+    const savin_field = document.getElementById("savinfo") as HTMLInputElement
+    const asave_button = document.getElementById("asave") as HTMLButtonElement
+    const aload_button = document.getElementById("aload") as HTMLButtonElement
+    const dem_but_set = document.getElementById("dem-set") as HTMLButtonElement
+    let but_checked: null|HTMLInputElement = null
+    function add_radio_button(label: string, func: Function) {
+        let div = document.createElement("div")
+        let button = document.createElement("input")
+        let labelE = document.createElement("label")
+        labelE.innerHTML = label
+        button.type = "radio"
+        button.addEventListener("change", () => {
+            if (but_checked !== null)
+                but_checked.checked = false
+            but_checked = button
+            func()
+        })
+        div.appendChild(button)
+        div.appendChild(labelE)
+        dem_but_set.appendChild(div)
+    }
     const box_height = 30
     let canvas_init = false;
     let scale = 0.99;
@@ -60,7 +84,7 @@ window.onload = () => {
                 y.parent.right = x
             else
                 y.parent.left = x
-            x.left = y
+            x.right = y
             y.parent = x
 
             y.height = y.getMaxHeight() + 1
@@ -76,13 +100,13 @@ window.onload = () => {
                     break
                 const balance = x.balance()
                 if (balance > 1) {
-                    if (x.left != null && x.left.balance() < -1)
+                    if (x.left != null && x.left.balance() < 0)
                         this.leftRotate(x.left)
                     this.rightRotate(x)
                 }
                 
                 else if (balance < -1) {
-                    if (x.left != null && x.right.balance() > 1)
+                    if (x.left != null && x.right.balance() > 0)
                         this.leftRotate(x.right)
                     this.leftRotate(x)
                 }
@@ -90,12 +114,15 @@ window.onload = () => {
                 rconut ++;
             }
         }
-        add_node(this: Tree, value: number): void {
+        add_node(this: Tree, value: number): void|TrNode {
             let nn = new TrNode(value)
             let x: TrNode | null = this.root
             let y: TrNode | null = null
             while (x !== null){
                 y = x
+                if (x.value == value) {
+                    return
+                }
                 if (x.value >= value){
                     x = x.left
                 } else {
@@ -115,15 +142,183 @@ window.onload = () => {
                 y.right = nn
             }
             this.add_fixup(nn)
+            return nn;
+        }
+        search_node(this: Tree, value: number): TrNode | null {
+            let x: TrNode | null = this.root
+            while (x !== null){
+                if (x.value === value) {
+                    return x
+                }
+                if (x.value >= value){
+                    x = x.left
+                } else {
+                    x = x.right
+                }
+            }
+            return null
+            //this.add_fixup(nn)
+        }
+        delete_node(this: Tree, value: number): TrNode | void {
+            const x: TrNode | null = this.search_node(value)
+            if (x === null || x === undefined) {
+                return
+            }
+            if (x.right === null) {
+                this.transplant(x, x.left)
+                this.add_fixup(x.left)
+            }
+            else if (x.left === null) {
+                this.transplant(x, x.right)
+                this.add_fixup(x.right)
+            }
+            else {
+                const y = this.tree_minimum(x.right)
+                if (y.parent !== x) {
+                    this.transplant(y, y.right)
+                    y.right = x.right
+                    y.right.parent = x
+                    this.add_fixup(x.right)
+                }
+                this.transplant(x, y)
+                y.left = x.left
+                y.left.parent = x
+                this.add_fixup(y)
+            }
+            return x
+        }
+        tree_minimum(this: Tree, root: TrNode): TrNode {
+            let min = root
+            while (min.left !== null) {
+                min = min.left
+            }
+            return min
+        }
+        transplant(u: TrNode, v: TrNode) {
+            if (u.parent === null) {
+                this.root = v
+            }
+            else if (u === u.parent.left) {
+                u.parent.left = v
+            }
+            else {
+                u.parent.right = v
+            }
+            if (v !== null)
+                v.parent = u.parent
         }
     }
     
     let tree: Tree = new Tree();
-    // tree.add_node(25)
-    // tree.add_node(20)
-    // tree.add_node(50)
-    // tree.add_node(-10)
-    // tree.add_node(30)
+    function serializeTree(node: TrNode): object {
+        if (node === null) {
+            return null;
+        }
+    
+        return {
+            value: node.value,
+            height: node.height,
+            left: serializeTree(node.left),
+            right: serializeTree(node.right)
+            // Omitting the parent property to avoid circular references
+        };
+    }
+    function deserializeTree(json: TrNode, parent: TrNode = null) {
+        if (json === null) {
+            return null;
+        }
+    
+        let node = new TrNode(json.value);
+        node.height = json.height;
+        node.parent = parent;
+        node.left = deserializeTree(json.left, node);
+        node.right = deserializeTree(json.right,node);
+        return node;
+    }
+    function treeToBase64(): string {
+        const json = JSON.stringify(serializeTree(tree.root));
+        return btoa(json);
+    }
+    function base64ToTree(base64: string) {
+        const json = atob(base64);
+        tree.root = deserializeTree(JSON.parse(json));
+    }
+    
+    
+    
+    class HistoryItem{
+        state: TrNode
+        description: string
+        constructor(description: string, state: TrNode) {
+            this.state = state
+            this.description = description
+        }
+        load() {
+            tree.root = this.state
+        }
+    }
+    class History{
+        storage: Array<HistoryItem>
+        frame: number
+        constructor(){
+            this.storage = []
+            this.add_change("init")
+            this.frame = 0
+        }
+        add_change(description: string) {
+            const ctree = cloneTreeNode(tree.root)
+            //console.log(ctree)
+            const next = new HistoryItem(description, ctree)
+            this.storage.push(next)
+            console.log(this.frame)
+            this.frame += 1
+            let f = this.frame
+            console.log(this.frame, f)
+            add_radio_button(description, () => {
+                this.frame = f
+                this.load()
+            })
+            console.log(this.storage, this.frame)
+        }
+        load() {
+            console.log(this.storage, this.frame, this.storage[this.frame])
+            this.storage[this.frame].load()
+            frame_field.value = this.frame.toString()
+        }
+        next() {
+            if (this.frame == this.storage.length-1)
+                return
+            this.frame += 1
+            this.load()
+        }
+        prev() {
+            if (this.frame == 0)
+                return
+            this.frame -= 1
+            this.load()
+        }
+        add_node(value: number) {
+            this.add_change("add: " + value)
+        }
+        del_node(value: number) {
+            this.add_change("del: " + value)
+        }
+        clear_node() {
+            this.add_change("clear")
+        }
+    }
+    const history = new History()
+    tree.add_node(1)
+    tree.add_node(-1)
+    tree.add_node(11)
+    tree.add_node(10)
+    tree.add_node(21)
+    tree.add_node(45)
+    tree.add_node(25)
+    tree.add_node(20)
+    tree.add_node(50)
+    tree.add_node(-10)
+    tree.add_node(30)
     // tree.add_node(23)
     // tree.add_node(11)
     // tree.add_node(-30)
@@ -146,6 +341,7 @@ window.onload = () => {
         console.log(value)
         insert_input.value = ""
         tree.add_node(value)
+        history.add_node(value)
         console.log(tree)
     }
 
@@ -154,7 +350,35 @@ window.onload = () => {
     }
     clear_button.onclick = () => {
         tree.root = null
+        history.clear_node()
     }
+    next_button.onclick = () => {
+        history.next()
+        console.log("next")
+    }
+    prev_button.onclick = () => {
+        history.prev()
+        console.log("prev")
+    }
+    asave_button.onclick = () => {
+        savin_field.value = treeToBase64()
+    }
+    aload_button.onclick = () => {
+        base64ToTree(savin_field.value)
+    }
+    delete_button.onclick = () => {
+        let value = Number(insert_input.value)
+        if (isNaN(value) || insert_input.value === ''){
+            insert_input.value = ""
+            return
+        }
+        console.log(value)
+        insert_input.value = ""
+        let x = tree.delete_node(value)
+        console.log(x)
+        history.del_node(value)
+    }
+
     function update() {
         // debugger
         if (canvas === null) {
